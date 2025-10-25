@@ -6,7 +6,7 @@ from core.config import Config
 from core.telegram_service import TelegramService
 from core.command_handler import CommandHandler
 
-SERVER_URL = "ws://localhost:8000/ws/agent"
+SERVER_URL = "ws://control.imsteve.dev/ws"
 
 class WebSocketClient:
     def __init__(self, on_chat_callback=None, on_status_callback=None):
@@ -18,7 +18,7 @@ class WebSocketClient:
         self.ws = None
 
     async def connect(self):
-        uri = f"{SERVER_URL}?device_id={self.cfg.device_id}"
+        uri = f"{SERVER_URL}/{self.cfg.device_id}"
         while True:
             try:
                 async with websockets.connect(uri) as ws:
