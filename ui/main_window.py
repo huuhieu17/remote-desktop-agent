@@ -1,9 +1,11 @@
 # ui/main_window.py
+import os
 import sys
 import tkinter as tk
 import asyncio
 import threading
 import ctypes
+from tkinter import messagebox
 if sys.platform == "win32":
     import winreg
 else:
@@ -38,6 +40,11 @@ class MainWindow(tk.Tk):
         tk.Label(self, text="Device ID:").pack()
         self.device_label = tk.Label(self, text=self.cfg.device_id, wraplength=380)
         self.device_label.pack(pady=4)
+
+        button_frame = tk.Frame(self)
+        button_frame.pack(pady=5)
+        tk.Button(button_frame, text="📋 Copy ID", command=self.copy_device_id).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="📂 Open Config Folder", command=self.open_config_folder).pack(side=tk.LEFT, padx=5)
 
         tk.Button(self, text="Revoke Device ID", command=self.revoke).pack(pady=5)
 
@@ -160,3 +167,27 @@ class MainWindow(tk.Tk):
         self.icon = pystray.Icon("agent", image, "Windows Agent", menu)
         self.icon.run()
 
+    def copy_device_id(self):
+        """Copy Device ID to clipboard"""
+        self.clipboard_clear()
+        self.clipboard_append(self.cfg.device_id)
+        self.update()  # keeps clipboard after closing
+        messagebox.showinfo("Copied", "Device ID copied to clipboard!")
+
+    def open_config_folder(self):
+        """Open folder containing config.json (create if missing)"""
+        config_path = os.path.abspath(self.cfg.config_path) if hasattr(self.cfg, "config_path") else None
+        if not config_path:
+            messagebox.showerror("Error", "Config path not found in Config class.")
+            return
+        folder = os.path.dirname(config_path)
+        os.makedirs(folder, exist_ok=True)
+        try:
+            if sys.platform == "win32":
+                os.startfile(folder)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", folder])
+            else:
+                subprocess.Popen(["xdg-open", folder])
+        except Exception as e:
+            messagebox.showerror("Error", f"Cannot open folder:\n{e}")
