@@ -2,12 +2,10 @@
 import asyncio
 import os
 import sys
-import threading
 if sys.platform == "win32":
     import winreg
 else:
     winreg = None
-from core.websocket_client import WebSocketClient
 from ui.main_window import MainWindow
 
 def add_to_startup(file_path=None):
@@ -24,15 +22,7 @@ def add_to_startup(file_path=None):
     except Exception as e:
         print(f"⚠️ Failed to add to startup: {e}")
         
-def start_ws():
-    client = WebSocketClient()
-    asyncio.run(client.connect())
-
 if __name__ == "__main__":
     add_to_startup()
-    
-    t = threading.Thread(target=start_ws, daemon=True)
-    t.start()
-
     app = MainWindow()
     app.mainloop()
