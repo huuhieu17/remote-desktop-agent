@@ -34,7 +34,7 @@ class MainWindow(tk.Tk):
         super().__init__()
         self.cfg = Config()
         self.title("Windows Agent")
-        self.geometry("420x500")
+        self.geometry("600x800")
 
         # ===== Device Info =====
         tk.Label(self, text="Device ID:").pack()
@@ -131,7 +131,7 @@ class MainWindow(tk.Tk):
         text = self.msg_entry.get().strip()
         if not text:
             return
-        asyncio.run(self.client.send_chat(text))
+        self.client.send_chat(text)
         self.msg_entry.delete(0, tk.END)
         self.display_chat(f"You: {text}")
 
