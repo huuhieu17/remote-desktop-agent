@@ -82,7 +82,7 @@ class MainWindow(tk.Tk):
         self.tray_thread.start()
 
     def run_ws(self):
-        asyncio.run(self.client.connect())
+        self.client.connect()
 
     def revoke(self):
         """Revoke device id + remove from startup"""
