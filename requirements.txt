@@ -5,3 +5,4 @@ tkinterweb
 pyautogui
 pystray
 pillow
+psutil

@@ -3,7 +3,10 @@ import asyncio
 import os
 import sys
 import threading
-import winreg
+if sys.platform == "win32":
+    import winreg
+else:
+    winreg = None
 from core.websocket_client import WebSocketClient
 from ui.main_window import MainWindow
 

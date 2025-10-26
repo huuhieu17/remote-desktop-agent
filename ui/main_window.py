@@ -1,9 +1,13 @@
 # ui/main_window.py
+import sys
 import tkinter as tk
 import asyncio
 import threading
 import ctypes
-import winreg
+if sys.platform == "win32":
+    import winreg
+else:
+    winreg = None
 from PIL import Image, ImageDraw
 import pystray
 from core.config import Config
