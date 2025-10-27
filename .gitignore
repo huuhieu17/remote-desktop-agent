@@ -1,0 +1,8 @@
+build/
+!.gitkeep
+dist/
+build
+.DS_Store
+.venv/
+__pycache__/
+config.json
