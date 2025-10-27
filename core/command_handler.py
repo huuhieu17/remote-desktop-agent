@@ -9,7 +9,7 @@ class CommandHandler:
 
     from core.command_executor import CommandExecutor
 
-    def enqueue_command(self, cmd):
+    async def enqueue_command(self, cmd):
         print(f"📩 Received command: {cmd}")
-        CommandExecutor.execute(cmd)
+        await CommandExecutor.execute(cmd['data'])
 
