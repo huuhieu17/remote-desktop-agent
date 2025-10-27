@@ -1,9 +1,8 @@
-# core/websocket_client.py
 import asyncio
 import json
 import time
 import threading
-from websocket import WebSocketApp
+from websocket import WebSocketApp, WebSocketConnectionClosedException
 from core.config import Config
 from core.telegram_service import TelegramService
 from core.command_handler import CommandHandler
@@ -18,13 +17,23 @@ class WebSocketClient:
         self.handler = CommandHandler()
         self.on_chat_callback = on_chat_callback
         self.on_status_callback = on_status_callback
+
         self.ws = None
         self._should_reconnect = True
+        self._is_reconnecting = False  # 🔒 tránh reconnect song song
+        self._reconnect_delay = 5      # giây — sẽ tăng dần nếu thất bại
+
+    # --------------------------------------------------
+    # WebSocket Event Handlers
+    # --------------------------------------------------
 
     def _on_open(self, ws):
         print("✅ Connected to server")
         self.telegram.send_message("🟢 Agent đã kết nối server")
         self.telegram.send_message(f"{self.cfg.device_id}")
+        self._reconnect_delay = 5      # reset delay khi kết nối lại thành công
+        self._is_reconnecting = False  # cho phép reconnect lần sau nếu mất kết nối
+
         if self.on_status_callback:
             self.on_status_callback(True)
 
@@ -33,6 +42,7 @@ class WebSocketClient:
             if not message or not message.strip():
                 print("⚠️ Received empty WS message — skipping")
                 return
+
             data = json.loads(message)
             print(f"Received: {data}")
             msg_type = data.get("event")
@@ -49,7 +59,7 @@ class WebSocketClient:
                 if self.on_chat_callback:
                     self.on_chat_callback(msg)
                 self.telegram.send_message(f"💬 {msg}")
-                
+
         except json.JSONDecodeError as e:
             print(f"⚠️ Invalid JSON message: {message!r} ({e})")
         except Exception as e:
@@ -59,25 +69,51 @@ class WebSocketClient:
         print(f"⚠️ Disconnected from server ({close_status_code}): {close_msg}")
         if self.on_status_callback:
             self.on_status_callback(False)
-        if self._should_reconnect:
-            self._reconnect()
+        self._schedule_reconnect()
 
     def _on_error(self, ws, error):
         print(f"⚠️ WS error: {error}")
         if self.on_status_callback:
             self.on_status_callback(False)
-        if self._should_reconnect:
-            self._reconnect()
+        self._schedule_reconnect()
 
-    def _reconnect(self):
-        """Tự động reconnect khi mất kết nối"""
-        print("🔁 Reconnecting in 5s...")
-        time.sleep(5)
-        self.connect()
+    # --------------------------------------------------
+    # Reconnect Logic (với exponential backoff)
+    # --------------------------------------------------
+
+    def _schedule_reconnect(self):
+        """Chỉ gọi reconnect nếu chưa có reconnect đang chạy."""
+        if not self._should_reconnect:
+            return
+        if self._is_reconnecting:
+            print("⏳ Reconnect already in progress — skipping")
+            return
+
+        self._is_reconnecting = True
+        thread = threading.Thread(target=self._reconnect_loop, daemon=True)
+        thread.start()
+
+    def _reconnect_loop(self):
+        """Thử reconnect với delay tăng dần (exponential backoff)."""
+        while self._should_reconnect:
+            print(f"🔁 Trying to reconnect in {self._reconnect_delay}s...")
+            time.sleep(self._reconnect_delay)
+            try:
+                self.connect()
+                # Nếu connect thành công, _on_open sẽ reset delay
+                break
+            except Exception as e:
+                print(f"⚠️ Reconnect failed: {e}")
+                self._reconnect_delay = min(self._reconnect_delay * 2, 60)  # giới hạn 60s
+
+    # --------------------------------------------------
+    # Connection & Messaging
+    # --------------------------------------------------
 
     def connect(self):
         """Khởi tạo và chạy WebSocket connection"""
         uri = f"{SERVER_URL}/{self.cfg.device_id}"
+        print(f"🌐 Connecting to {uri} ...")
         self.ws = WebSocketApp(
             uri,
             on_open=self._on_open,
@@ -85,8 +121,6 @@ class WebSocketClient:
             on_close=self._on_close,
             on_error=self._on_error,
         )
-
-        # Dùng thread để không block main thread
         thread = threading.Thread(target=self.ws.run_forever, daemon=True)
         thread.start()
 
@@ -98,6 +132,9 @@ class WebSocketClient:
         try:
             payload = json.dumps({"type": "chat", "message": text})
             self.ws.send(payload)
+        except WebSocketConnectionClosedException:
+            print("⚠️ Connection closed — scheduling reconnect")
+            self._schedule_reconnect()
         except Exception as e:
             print(f"⚠️ Send chat failed: {e}")
 
@@ -119,5 +156,7 @@ class WebSocketClient:
     def stop(self):
         """Ngắt kết nối thủ công"""
         self._should_reconnect = False
+        self._is_reconnecting = False
         if self.ws:
             self.ws.close()
+        print("🛑 WebSocket client stopped.")
