@@ -1,4 +1,5 @@
 # core/websocket_client.py
+import asyncio
 import json
 import time
 import threading
@@ -23,16 +24,24 @@ class WebSocketClient:
     def _on_open(self, ws):
         print("✅ Connected to server")
         self.telegram.send_message("🟢 Agent đã kết nối server")
+        self.telegram.send_message(f"{self.cfg.device_id}")
         if self.on_status_callback:
             self.on_status_callback(True)
 
     def _on_message(self, ws, message):
         try:
+            if not message or not message.strip():
+                print("⚠️ Received empty WS message — skipping")
+                return
             data = json.loads(message)
-            msg_type = data.get("type")
+            print(f"Received: {data}")
+            msg_type = data.get("event")
 
             if msg_type == "command":
-                self.handler.enqueue_command(data)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.handler.enqueue_command(data))
+                loop.close()
 
             elif msg_type == "chat":
                 msg = f"{data.get('from')}: {data.get('message')}"
@@ -40,7 +49,9 @@ class WebSocketClient:
                 if self.on_chat_callback:
                     self.on_chat_callback(msg)
                 self.telegram.send_message(f"💬 {msg}")
-
+                
+        except json.JSONDecodeError as e:
+            print(f"⚠️ Invalid JSON message: {message!r} ({e})")
         except Exception as e:
             print(f"⚠️ Error handling WS message: {e}")
 
