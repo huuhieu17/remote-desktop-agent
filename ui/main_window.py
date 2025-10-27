@@ -1,121 +1,152 @@
-# ui/main_window.py
 import os
 import sys
 import tkinter as tk
-import asyncio
+from tkinter import ttk, messagebox
 import threading
 import ctypes
-from tkinter import messagebox
+from PIL import Image, ImageDraw
+import pystray
+
+from core.telegram_service import TelegramService
 if sys.platform == "win32":
     import winreg
 else:
     winreg = None
-from PIL import Image, ImageDraw
-import pystray
+
 from core.config import Config
 from core.websocket_client import WebSocketClient
 
+
 def remove_from_startup():
-    """Gỡ app khỏi tự khởi động Windows"""
     try:
         key = winreg.HKEY_CURRENT_USER
-        key_value = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        key_value = r"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
         open_key = winreg.OpenKey(key, key_value, 0, winreg.KEY_ALL_ACCESS)
         winreg.DeleteValue(open_key, "WindowManagerAgent")
         winreg.CloseKey(open_key)
-        print("🧹 Removed from startup")
-    except FileNotFoundError:
+    except Exception:
         pass
-    except Exception as e:
-        print(f"⚠️ Failed to remove from startup: {e}")
+
 
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.cfg = Config()
         self.title("Windows Agent")
-        self.geometry("600x800")
+        self.geometry("550x800")
+        self.minsize(520, 500)
+        self.configure(bg="#f5f6fa")
+        self.telegram = TelegramService()
+        # ===== Style =====
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure("TLabel", background="#f5f6fa", font=("Segoe UI", 10))
+        style.configure("Header.TLabel", font=("Segoe UI", 11, "bold"), foreground="#0066cc")
+        style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=5)
 
-        # ===== Device Info =====
-        tk.Label(self, text="Device ID:").pack()
-        self.device_label = tk.Label(self, text=self.cfg.device_id, wraplength=380)
-        self.device_label.pack(pady=4)
+        container = ttk.Frame(self, padding=10)
+        container.pack(fill=tk.BOTH, expand=True)
 
-        button_frame = tk.Frame(self)
-        button_frame.pack(pady=5)
-        tk.Button(button_frame, text="📋 Copy ID", command=self.copy_device_id).pack(side=tk.LEFT, padx=5)
-        tk.Button(button_frame, text="📂 Open Config Folder", command=self.open_config_folder).pack(side=tk.LEFT, padx=5)
+        # ===== Top Info (shortened) =====
+        info_frame = ttk.LabelFrame(container, text="Device Info")
+        info_frame.pack(fill=tk.X, pady=5)
 
-        tk.Button(self, text="Revoke Device ID", command=self.revoke).pack(pady=5)
+        ttk.Label(info_frame, text="Device ID:").pack(anchor="w")
+        self.device_label = ttk.Label(info_frame, text=self.cfg.device_id, wraplength=400)
+        self.device_label.pack(anchor="w", pady=(0, 4))
 
-        # ===== Telegram Config =====
-        tk.Label(self, text="Telegram Token:").pack()
-        self.token_entry = tk.Entry(self, width=45)
+        btn_row = ttk.Frame(info_frame)
+        btn_row.pack()
+        ttk.Button(btn_row, text="📋 Copy ID", width=14, command=self.copy_device_id).pack(side=tk.LEFT, padx=3)
+        ttk.Button(btn_row, text="📂 Open Folder", width=14, command=self.open_config_folder).pack(side=tk.LEFT, padx=3)
+        ttk.Button(btn_row, text="❌ Revoke", width=14, command=self.revoke).pack(side=tk.LEFT, padx=3)
+
+
+        # ===== Telegram Config (compact) =====
+        tg_frame = ttk.LabelFrame(container, text="Telegram Config")
+        tg_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Label(tg_frame, text="Token:").pack(anchor="w")
+        self.token_entry = ttk.Entry(tg_frame, width=45)
         self.token_entry.insert(0, self.cfg.telegram_token)
-        self.token_entry.pack()
+        self.token_entry.pack(anchor="w", pady=2)
 
-        tk.Label(self, text="Chat ID:").pack()
-        self.chat_entry = tk.Entry(self, width=45)
+        ttk.Label(tg_frame, text="Chat ID:").pack(anchor="w")
+        self.chat_entry = ttk.Entry(tg_frame, width=45)
         self.chat_entry.insert(0, self.cfg.telegram_chat_id)
-        self.chat_entry.pack()
+        self.chat_entry.pack(anchor="w", pady=2)
 
-        tk.Button(self, text="Save Telegram Config", command=self.save_telegram).pack(pady=5)
+        ttk.Button(tg_frame, text="💾 Save Config", command=self.save_telegram).pack(pady=4)
 
         # ===== Status =====
-        self.status_label = tk.Label(self, text="🔴 Disconnected")
-        self.status_label.pack(pady=5)
+        self.status_label = ttk.Label(container, text="🔴 Disconnected", foreground="red", font=("Segoe UI", 10, "bold"))
+        self.status_label.pack(pady=(5, 10))
 
-        # ===== Chat Box =====
-        tk.Label(self, text="Chat with Controller").pack()
-        self.chat_box = tk.Text(self, height=10, width=50, state=tk.DISABLED)
-        self.chat_box.pack(pady=5)
+        # ===== Chat Section =====
+        chat_frame = ttk.LabelFrame(container, text="Chat with Controller")
+        chat_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.msg_entry = tk.Entry(self, width=40)
-        self.msg_entry.pack(side=tk.LEFT, padx=5)
-        tk.Button(self, text="Send", command=self.send_chat).pack(side=tk.LEFT)
+        # Chat box
+        self.chat_box = tk.Text(chat_frame, height=8, wrap=tk.WORD,
+                                bg="#1e1e1e", fg="#e0e0e0", font=("Consolas", 10),
+                                relief=tk.FLAT, padx=10, pady=6, state=tk.DISABLED)
+        self.chat_box.pack(fill=tk.BOTH, expand=True, pady=(5, 2))
 
-        # ===== WebSocket Client =====
+        # Input row (fixed bottom)
+        input_row = ttk.Frame(chat_frame)
+        input_row.pack(fill=tk.X, pady=4)
+        self.msg_entry = ttk.Entry(input_row)
+        self.msg_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 4))
+        ttk.Button(input_row, text="Send ➤", command=self.send_chat).pack(side=tk.LEFT, padx=4)
+        self.msg_entry.bind("<Return>", self._on_enter)
+
+        # ===== WebSocket =====
         self.client = WebSocketClient(
             on_chat_callback=self.display_chat,
             on_status_callback=self.update_status
         )
-
         threading.Thread(target=self.run_ws, daemon=True).start()
 
-        # ===== System Tray =====
+        # ===== Tray =====
         self.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
         self.icon = None
-        self.tray_thread = threading.Thread(target=self.create_tray_icon, daemon=True)
-        self.tray_thread.start()
+        threading.Thread(target=self.create_tray_icon, daemon=True).start()
+
+    # ========== Core Functions ==========
 
     def run_ws(self):
         self.client.connect()
 
     def revoke(self):
-        """Revoke device id + remove from startup"""
         self.cfg.revoke_device_id()
         self.device_label.config(text=self.cfg.device_id)
         remove_from_startup()
-        self.status_label.config(text="⚠️ Device ID revoked, removed from startup")
+        self.status_label.config(text="⚠️ Device ID revoked", foreground="orange")
 
     def save_telegram(self):
         self.cfg.telegram_token = self.token_entry.get()
         self.cfg.telegram_chat_id = self.chat_entry.get()
         self.cfg.save()
-        self.status_label.config(text="💾 Saved Telegram config")
+        messagebox.showinfo("Saved", "Telegram config saved!\nApp will restart.")
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
 
     def update_status(self, connected: bool):
-        color = "🟢 Connected" if connected else "🔴 Disconnected"
-        self.status_label.config(text=color)
+        self.status_label.config(
+            text="🟢 Connected" if connected else "🔴 Disconnected",
+            foreground="green" if connected else "red"
+        )
+
+    # ========== Chat Logic ==========
 
     def display_chat(self, msg: str):
-        """Hiển thị tin nhắn và tự bật app nếu đang minimize"""
         self.chat_box.config(state=tk.NORMAL)
-        self.chat_box.insert(tk.END, msg + "\n")
+        tag = "selfmsg" if msg.startswith("You:") else "servermsg"
+        self.chat_box.insert(tk.END, msg + "\n", tag)
+        self.chat_box.tag_config("selfmsg", foreground="#00aaff")
+        self.chat_box.tag_config("servermsg", foreground="#90ee90")
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
-
-        # 👉 Kiểm tra nếu đang minimize → restore
         try:
             if self.state() == 'iconic':
                 self.deiconify()
@@ -124,9 +155,14 @@ class MainWindow(tk.Tk):
             hwnd = ctypes.windll.user32.GetForegroundWindow()
             ctypes.windll.user32.ShowWindow(hwnd, 9)
             ctypes.windll.user32.SetForegroundWindow(hwnd)
-        except Exception as e:
-            print(f"⚠️ Restore window failed: {e}")
+        except Exception:
+            pass
 
+    def _on_enter(self, event):
+        """Gửi tin nhắn khi nhấn Enter"""
+        self.send_chat()
+        return "break"  # Ngăn xuống dòng trong Entry
+    
     def send_chat(self):
         text = self.msg_entry.get().strip()
         if not text:
@@ -134,21 +170,24 @@ class MainWindow(tk.Tk):
         self.client.send_chat(text)
         self.msg_entry.delete(0, tk.END)
         self.display_chat(f"You: {text}")
+        
+        # Gửi qua Telegram ở thread phụ để không chặn UI
+        threading.Thread(
+            target=lambda: self.telegram.send_message(f"Agent was sent message: {text}"),
+            daemon=True
+        ).start()
 
-    # ================== TRAY ICON ==================
-
+    # ========== Tray ==========
     def minimize_to_tray(self):
-        """Ẩn cửa sổ và hiển thị icon trong tray"""
         self.withdraw()
         if not self.icon:
             self.create_tray_icon()
 
     def create_tray_icon(self):
-        """Tạo icon nhỏ trong khay hệ thống"""
         image = Image.new('RGB', (64, 64), color='white')
         draw = ImageDraw.Draw(image)
         draw.rectangle((0, 0, 63, 63), fill=(30, 144, 255))
-        draw.text((20, 20), "A", fill="white")
+        draw.text((22, 20), "A", fill="white")
 
         def on_show(icon, item):
             self.deiconify()
@@ -160,27 +199,25 @@ class MainWindow(tk.Tk):
             self.destroy()
 
         menu = pystray.Menu(
-            pystray.MenuItem("Hiện cửa sổ", on_show),
-            pystray.MenuItem("Thoát", on_exit)
+            pystray.MenuItem("Show Window", on_show),
+            pystray.MenuItem("Exit", on_exit)
         )
-
         self.icon = pystray.Icon("agent", image, "Windows Agent", menu)
         self.icon.run()
 
+    # ========== Helpers ==========
     def copy_device_id(self):
-        """Copy Device ID to clipboard"""
         self.clipboard_clear()
         self.clipboard_append(self.cfg.device_id)
-        self.update()  # keeps clipboard after closing
-        messagebox.showinfo("Copied", "Device ID copied to clipboard!")
+        self.update()
+        messagebox.showinfo("Copied", "Device ID copied!")
 
     def open_config_folder(self):
-        """Open folder containing config.json (create if missing)"""
-        config_path = os.path.abspath(self.cfg.config_path) if hasattr(self.cfg, "config_path") else None
-        if not config_path:
-            messagebox.showerror("Error", "Config path not found in Config class.")
+        path = os.path.abspath(getattr(self.cfg, "config_path", ""))
+        if not path:
+            messagebox.showerror("Error", "Config path not found.")
             return
-        folder = os.path.dirname(config_path)
+        folder = os.path.dirname(path)
         os.makedirs(folder, exist_ok=True)
         try:
             if sys.platform == "win32":
