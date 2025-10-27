@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 import pystray
 
 from core.telegram_service import TelegramService
+from core.tts_service import synthesize_and_play
 if sys.platform == "win32":
     import winreg
 else:
@@ -147,6 +148,15 @@ class MainWindow(tk.Tk):
         self.chat_box.tag_config("servermsg", foreground="#90ee90")
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
+
+        # Khi có tin nhắn mới từ server → đọc bằng TTS
+        if not msg.startswith("You:"):
+            text_to_speak = msg.replace("Controller:", "").strip()
+            threading.Thread(
+                target=lambda: synthesize_and_play(text_to_speak, voice_gender="FEMALE"),
+                daemon=True
+            ).start()
+
         try:
             if self.state() == 'iconic':
                 self.deiconify()
