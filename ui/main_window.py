@@ -33,7 +33,7 @@ class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
         self.cfg = Config()
-        self.title("Windows Agent")
+        self.title("Windows Remote Agent")
         self.geometry("550x800")
         self.minsize(520, 500)
         self.configure(bg="#f5f6fa")
@@ -151,7 +151,7 @@ class MainWindow(tk.Tk):
 
         # Khi có tin nhắn mới từ server → đọc bằng TTS
         if not msg.startswith("You:"):
-            text_to_speak = msg.replace("Controller:", "").strip()
+            text_to_speak = msg.split(":", 1)[1]
             threading.Thread(
                 target=lambda: synthesize_and_play(text_to_speak, voice_gender="FEMALE"),
                 daemon=True

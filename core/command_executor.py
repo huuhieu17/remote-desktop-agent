@@ -100,7 +100,7 @@ class ScreenCaptureCommand(ICommand):
     def execute(self):
         image = pyautogui.screenshot()
         filename = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        save_path = os.path.join(os.getcwd(), "screenshots")
+        save_path = os.path.join(os.path.expanduser("~"), ".window_manager_agent", "screenshots")
         os.makedirs(save_path, exist_ok=True)
         full_path = os.path.join(save_path, filename)
         image.save(full_path)
