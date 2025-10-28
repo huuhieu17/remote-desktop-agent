@@ -136,14 +136,49 @@ class ShellCommand(ICommand):
             )
 
             return {
+                "type": "command_result",
                 "status": "success" if result.returncode == 0 else "error",
                 "output": output,
                 "error": error
             }
 
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            return {"type": "command_result","status": "error", "message": str(e)}
 
+class GetListProcessCommand(ICommand):
+    """Lấy danh sách process đang chạy"""
+    def execute(self):
+        try:
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent']):
+                try:
+                    info = proc.info
+                    processes.append({
+                        "pid": info.get("pid"),
+                        "name": info.get("name"),
+                        "user": info.get("username"),
+                        "cpu": round(info.get("cpu_percent", 0.0), 2),
+                        "memory": round(info.get("memory_percent", 0.0), 2)
+                    })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+
+            processes.sort(key=lambda x: x['cpu'], reverse=True)
+            top_30 = processes[:30]
+
+            print(f"📋 Found {len(processes)} running processes.")
+            return {
+                "type": "forward_list_running_process",
+                "status": "success",
+                "data": {
+                    "total": len(processes),
+                    "top_processes": top_30,
+                    "data": processes
+                },
+            }
+
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
 
 # ===== Factory / Executor =====
 class CommandExecutor:
@@ -175,6 +210,8 @@ class CommandExecutor:
             return ScreenCaptureCommand()
         elif action == "shell":
             return ShellCommand(cmd.get("command", ""))
+        elif action == "get_list_process":
+            return GetListProcessCommand()
         else:
             print(f"[⚠️ Unknown Command Type] {action}")
             return None
@@ -193,6 +230,6 @@ class CommandExecutor:
 
         # gửi kết quả về server nếu có websocket
         if CommandExecutor.ws_client:
-            await CommandExecutor.ws_client.send_result(cmd.get("request_id"), result)
+            await CommandExecutor.ws_client.send_result(result)
 
         return result

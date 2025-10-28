@@ -22,7 +22,7 @@ class WebSocketClient:
         self._should_reconnect = True
         self._is_reconnecting = False  # 🔒 tránh reconnect song song
         self._reconnect_delay = 5      # giây — sẽ tăng dần nếu thất bại
-
+        self.controllers = {}
     # --------------------------------------------------
     # WebSocket Event Handlers
     # --------------------------------------------------
@@ -47,11 +47,20 @@ class WebSocketClient:
             print(f"Received: {data}")
             msg_type = data.get("event")
 
+            
             if msg_type == "command":
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(self.handler.enqueue_command(data))
                 loop.close()
+
+            elif msg_type == "connect_success":
+                controller_id = data.get("controller_id")
+                if controller_id:
+                    self.controllers[controller_id] = {"connected_at": time.time()}
+                    print(f"✅ Controller connected: {controller_id}")
+                    self.telegram.send_message(f"🤝 Connected to controller {controller_id}")
+                return
 
             elif msg_type == "chat":
                 msg = f"{data.get('from')}: {data.get('message')}"
@@ -131,25 +140,31 @@ class WebSocketClient:
             return
         try:
             payload = json.dumps({"type": "chat", "message": text})
-            self.ws.send(payload)
+            if self.controllers:
+                for cid in self.controllers.keys():
+                    payload["to"] = cid
+                    self.ws.send(json.dumps(payload))
+                    print(f"📤 Broadcast chat to controller {cid}")
         except WebSocketConnectionClosedException:
             print("⚠️ Connection closed — scheduling reconnect")
             self._schedule_reconnect()
         except Exception as e:
             print(f"⚠️ Send chat failed: {e}")
 
-    def send_result(self, request_id: str, result: dict):
+    def send_result(self, payload: dict):
         """Gửi kết quả command"""
         if not self.ws:
             print("⚠️ No active connection")
             return
         try:
-            packet = {
-                "type": "command_result",
-                "request_id": request_id,
-                "result": result,
-            }
-            self.ws.send(json.dumps(packet))
+            packet = {}
+            if self.controllers:
+                for cid in self.controllers.keys():
+                    packet["to"] = cid
+                    packet["client_id"] = cid
+                    packet["agent_id"] = self.cfg.device_id
+                    self.ws.send(json.dumps({**packet, **payload}))
+                    print(f"📤 Send response {cid}")
         except Exception as e:
             print(f"⚠️ Send result failed: {e}")
 
