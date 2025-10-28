@@ -14,7 +14,7 @@ class WebSocketClient:
     def __init__(self, on_chat_callback=None, on_status_callback=None):
         self.cfg = Config()
         self.telegram = TelegramService()
-        self.handler = CommandHandler()
+        self.handler = CommandHandler(self)
         self.on_chat_callback = on_chat_callback
         self.on_status_callback = on_status_callback
 
@@ -45,8 +45,7 @@ class WebSocketClient:
 
             data = json.loads(message)
             print(f"Received: {data}")
-            msg_type = data.get("event")
-
+            msg_type = data.get("type")
             
             if msg_type == "command":
                 loop = asyncio.new_event_loop()
@@ -139,7 +138,7 @@ class WebSocketClient:
             print("⚠️ No active connection")
             return
         try:
-            payload = json.dumps({"type": "chat", "message": text})
+            payload = {"type": "chat", "message": text}
             if self.controllers:
                 for cid in self.controllers.keys():
                     payload["to"] = cid
@@ -158,13 +157,15 @@ class WebSocketClient:
             return
         try:
             packet = {}
+            print(f"Controllers: {self.controllers}")
             if self.controllers:
                 for cid in self.controllers.keys():
                     packet["to"] = cid
                     packet["client_id"] = cid
                     packet["agent_id"] = self.cfg.device_id
-                    self.ws.send(json.dumps({**packet, **payload}))
-                    print(f"📤 Send response {cid}")
+                    merged = {**packet, **payload}
+                    self.ws.send(json.dumps(merged))
+                    print(f"📤 Send response {merged}")
         except Exception as e:
             print(f"⚠️ Send result failed: {e}")
 

