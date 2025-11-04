@@ -34,22 +34,45 @@ class LockCommand(ICommand):
         os.system("rundll32.exe user32.dll,LockWorkStation")
         return {"status": "success", "message": "Locked workstation"}
 
-
-class KillAppCommand(ICommand):
-    def __init__(self, target: str):
+class KillProcessCommand:
+    def __init__(self, target):
+        """
+        target: Can be either a process name (str) or a process ID (int)
+        """
         self.target = target
 
     def execute(self):
-        if not self.target:
-            return {"status": "error", "message": "Missing target app name"}
+        if self.target is None or self.target == "":
+            return {"status": "error", "message": "Missing target (process name or PID)"}
+
+        # Case 1: If target is an integer (PID)
+        if isinstance(self.target, int) or str(self.target).isdigit():
+            pid = int(self.target)
+            try:
+                proc = psutil.Process(pid)
+                proc.kill()
+                msg = f"Killed process with PID {pid} ({proc.name()})"
+                print(f"💀 {msg}")
+                return {"status": "success", "message": msg}
+            except psutil.NoSuchProcess:
+                return {"status": "error", "message": f"No process found with PID {pid}"}
+            except psutil.AccessDenied:
+                return {"status": "error", "message": f"Access denied for PID {pid}"}
+
+        # Case 2: If target is a process name
         count = 0
         for proc in psutil.process_iter(['name']):
-            if proc.info['name'] and self.target.lower() in proc.info['name'].lower():
-                proc.kill()
-                count += 1
-        msg = f"Killed {count} process(es) matching '{self.target}'"
+            try:
+                if proc.info['name'] and self.target.lower() in proc.info['name'].lower():
+                    proc.kill()
+                    count += 1
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        msg = f"Killed {count} process(es) matching name '{self.target}'"
         print(f"💀 {msg}")
         return {"status": "success", "message": msg}
+
 
 
 class WifiCommand(ICommand):
@@ -197,8 +220,8 @@ class CommandExecutor:
             return ShutdownCommand()
         elif action == "restart":
             return RestartCommand()
-        elif action == "kill_app":
-            return KillAppCommand(cmd.get("target"))
+        elif action == "kill_process":
+            return KillProcessCommand(cmd.get("target"))
         elif action == "disable_wifi":
             return WifiCommand(enable=False)
         elif action == "enable_wifi":
