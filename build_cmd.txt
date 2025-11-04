@@ -1,0 +1,1 @@
+pyinstaller --onefile --windowed --icon=app.ico --name "RemoteComputerAgent" --version-file version.txt --hidden-import psutil._psutil_windows app.py
