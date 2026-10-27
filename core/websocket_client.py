@@ -7,7 +7,7 @@ from core.config import Config
 from core.telegram_service import TelegramService
 from core.command_handler import CommandHandler
 
-SERVER_URL = "ws://control.imsteve.dev/ws"
+SERVER_URL = "wss://control.imsteve.dev/ws"
 
 
 class WebSocketClient:

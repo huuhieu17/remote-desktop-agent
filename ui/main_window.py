@@ -47,7 +47,15 @@ class MainWindow(tk.Tk):
 
         container = ttk.Frame(self, padding=10)
         container.pack(fill=tk.BOTH, expand=True)
-
+        # ===== WS Info (shortened) =====
+        ws_frame = ttk.LabelFrame(container, text="Websocket Info")
+        ws_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(ws_frame, text="Websocket URL:").pack(anchor="w")
+        self.ws_entry = ttk.Entry(ws_frame, width=45)
+        self.ws_entry.insert(0, self.cfg.ws_url)
+        self.ws_entry.pack(anchor="w", pady=2)
+        ttk.Button(ws_frame, text="💾 Save Config", command=self.save_ws_config).pack(pady=4)
+        
         # ===== Top Info (shortened) =====
         info_frame = ttk.LabelFrame(container, text="Device Info")
         info_frame.pack(fill=tk.X, pady=5)
@@ -127,10 +135,18 @@ class MainWindow(tk.Tk):
     def save_telegram(self):
         self.cfg.telegram_token = self.token_entry.get()
         self.cfg.telegram_chat_id = self.chat_entry.get()
+        self.cfg.ws_url = self.ws_entry.get()
         self.cfg.save()
         messagebox.showinfo("Saved", "Telegram config saved!\nApp will restart.")
         python = sys.executable
         os.execl(python, python, *sys.argv)
+        
+    def save_ws_config(self):
+            self.cfg.ws_url = self.ws_entry.get()
+            self.cfg.save()
+            messagebox.showinfo("Saved", "Websocket config saved!\nApp will restart.")
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
 
     def update_status(self, connected: bool):
         self.status_label.config(

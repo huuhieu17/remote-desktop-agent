@@ -33,6 +33,7 @@ class Config:
         self.device_id = data.get("device_id") or str(uuid.uuid4())
         self.telegram_token = data.get("telegram_token", "")
         self.telegram_chat_id = data.get("telegram_chat_id", "")
+        self.ws_url = data.get("websocket_url", "wss://control.imsteve.dev/ws")
         self.save()
     
     def save(self):
@@ -42,6 +43,7 @@ class Config:
                 "device_id": self.device_id,
                 "telegram_token": self.telegram_token,
                 "telegram_chat_id": self.telegram_chat_id,
+                "websocket_url": self.ws_url,
             }, f, indent=2)
 
     def revoke_device_id(self):
