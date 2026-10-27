@@ -18,11 +18,11 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'Steve'),
         StringStruct('FileDescription', 'Remote Computer Agent'),
-        StringStruct('FileVersion', '1.0.0'),
+        StringStruct('FileVersion', '1.0.2'),
         StringStruct('InternalName', 'Remote Computer Agent'),
         StringStruct('OriginalFilename', 'RemoteComputerAgent.exe'),
         StringStruct('ProductName', 'RemoteComputerAgent'),
-        StringStruct('ProductVersion', '1.0.0')])
+        StringStruct('ProductVersion', '1.0.2')])
         ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
